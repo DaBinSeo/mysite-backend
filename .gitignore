@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# 가상환경 (uv)
+.venv/
+
+# Django
+db.sqlite3
+db.sqlite3-journal
+media/
+
+# 개인 Claude Code 설정
+.claude/settings.local.json
+
+# OS / 에디터
+Thumbs.db
+.DS_Store
+.vscode/
+.idea/
