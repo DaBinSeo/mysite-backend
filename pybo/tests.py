@@ -3,7 +3,9 @@ from datetime import timedelta
 import jwt
 from django.conf import settings
 from django.contrib.auth.models import User
+from django.db import connection
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
 from .models import Answer, Question
@@ -68,6 +70,19 @@ class QuestionReadTests(ApiTestCase):
         self.assertEqual(body['answers'][0]['content'], '답변')
         self.assertIn('<strong>굵게</strong>', body['content_html'])
         self.assertNotIn('<script>', body['content_html'])
+
+    def test_detail_query_count_does_not_grow_with_answers(self):
+        path = f'{API}/questions/{self.question.id}/'
+        with CaptureQueriesContext(connection) as one_answer:
+            self.client.get(path)
+        for i in range(5):
+            answer = Answer.objects.create(author=self.author, question=self.question, content=f'a{i}',
+                                           create_date=timezone.now() + timedelta(seconds=i + 1))
+            answer.voter.add(self.other)
+        with CaptureQueriesContext(connection) as six_answers:
+            body = self.client.get(path).json()
+        self.assertEqual(len(six_answers), len(one_answer))  # 답변이 늘어도 쿼리 수는 그대로
+        self.assertEqual([a['voter_count'] for a in body['answers']], [0, 1, 1, 1, 1, 1])
 
     def test_unknown_question_and_path_return_json_404(self):
         self.assertEqual(self.client.get(f'{API}/questions/9999/').json()['detail'], '질문을 찾을 수 없습니다.')

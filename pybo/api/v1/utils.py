@@ -1,5 +1,6 @@
 import json
 
+from django.db.models import Count
 from django.http import JsonResponse
 
 from ...markdown_utils import render_markdown
@@ -59,6 +60,10 @@ def user_to_dict(user):
 
 
 def answer_to_dict(answer):
+    # 상세 조회는 voter_count를 annotate해서 넘긴다 (답변마다 COUNT 쿼리를 보내지 않도록)
+    voter_count = getattr(answer, 'voter_count', None)
+    if voter_count is None:
+        voter_count = answer.voter.count()
     return {
         'id': answer.id,
         'question_id': answer.question_id,
@@ -67,7 +72,7 @@ def answer_to_dict(answer):
         'author': answer.author.username,
         'create_date': _iso(answer.create_date),
         'modify_date': _iso(answer.modify_date),
-        'voter_count': answer.voter.count(),
+        'voter_count': voter_count,
     }
 
 
@@ -84,7 +89,9 @@ def question_summary(question):
 
 def question_to_dict(question):
     """상세용: 본문, 추천 수, 답변 목록까지 포함한다."""
-    answers = question.answer_set.select_related('author').order_by('create_date')
+    answers = (question.answer_set.select_related('author')
+               .annotate(voter_count=Count('voter'))
+               .order_by('create_date'))
     return {
         'id': question.id,
         'subject': question.subject,
