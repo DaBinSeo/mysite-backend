@@ -57,7 +57,7 @@ ROOT_URLCONF = 'config.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [BASE_DIR / 'templates'],
+        'DIRS': [],  # 화면은 frontend(React)가 담당, 관리자 화면은 APP_DIRS로 동작
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -118,9 +118,6 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.1/howto/static-files/
 
 STATIC_URL = 'static/'
-STATICFILES_DIRS = [
-    BASE_DIR / 'static',
-]
 
 # Email
 # https://docs.djangoproject.com/en/6.1/topics/email/#topic-email-configuration
@@ -131,5 +128,7 @@ MAILERS = {
     },
 }
 
-# 로그인 성공후 이동하는 URL
-LOGIN_REDIRECT_URL = '/'
+# JWT (API 인증)
+JWT_ALGORITHM = 'HS256'
+JWT_ACCESS_LIFETIME_MINUTES = 30
+JWT_REFRESH_LIFETIME_DAYS = 7
