@@ -13,6 +13,9 @@ media/
 # 개인 Claude Code 설정
 .claude/settings.local.json
 
+# Playwright MCP 브라우저 확인 결과물 (스크린샷, 로그)
+.playwright-mcp/
+
 # OS / 에디터
 Thumbs.db
 .DS_Store
