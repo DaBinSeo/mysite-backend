@@ -2,6 +2,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, get_object_or_404, redirect, resolve_url
 from django.utils import timezone
+from django.views.decorators.http import require_POST
 
 from ..forms import AnswerForm
 from ..models import Question, Answer
@@ -50,6 +51,7 @@ def answer_modify(request, answer_id):
     return render(request, 'pybo/answer_form.html', context)
 
 @login_required(login_url='common:login')
+@require_POST
 def answer_delete(request, answer_id):
     answer = get_object_or_404(Answer, pk=answer_id)
     if request.user != answer.author:
@@ -59,6 +61,7 @@ def answer_delete(request, answer_id):
     return redirect('pybo:detail', question_id=answer.question.id)
 
 @login_required(login_url='common:login')
+@require_POST
 def answer_vote(request, answer_id):
     answer = get_object_or_404(Answer, pk=answer_id)
     if request.user == answer.author:
