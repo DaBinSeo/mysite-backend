@@ -10,7 +10,7 @@ from .utils import (answer_to_dict, error_response, form_error_response,
 
 
 def _get_answer(answer_id):
-    return Answer.objects.select_related('author').filter(pk=answer_id).first()
+    return Answer.objects.select_related('author__profile').filter(pk=answer_id).first()
 
 
 # ---- /questions/<id>/answers/ ----

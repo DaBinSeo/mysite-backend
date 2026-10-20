@@ -55,11 +55,21 @@ def _iso(value):
     return value.isoformat() if value else None
 
 
-def user_to_dict(user):
-    # 닉네임 도입 전에 가입한 회원은 프로필이 없으므로 사용자ID를 대신 보여 준다
+def mask_username(username):
+    """사용자ID 뒤쪽 절반을 *로 가린다. 예: seodb → se***, tester01 → test****"""
+    visible = len(username) // 2
+    return username[:visible] + '*' * (len(username) - visible)
+
+
+def display_name(user):
+    # 닉네임 도입 전에 가입한 회원은 프로필이 없으므로 사용자ID를 일부 가려서 보여 준다
+    # (닉네임에는 *를 쓸 수 없어 가린 ID가 다른 회원의 닉네임과 겹치지 않는다)
     profile = getattr(user, 'profile', None)
-    return {'id': user.id, 'username': user.username,
-            'nickname': profile.nickname if profile else user.username}
+    return profile.nickname if profile else mask_username(user.username)
+
+
+def user_to_dict(user):
+    return {'id': user.id, 'username': user.username, 'nickname': display_name(user)}
 
 
 def answer_to_dict(answer):
@@ -72,7 +82,8 @@ def answer_to_dict(answer):
         'question_id': answer.question_id,
         'content': answer.content,
         'content_html': render_markdown(answer.content),
-        'author': answer.author.username,
+        'author': display_name(answer.author),
+        'author_id': answer.author_id,
         'create_date': _iso(answer.create_date),
         'modify_date': _iso(answer.modify_date),
         'voter_count': voter_count,
@@ -84,7 +95,8 @@ def question_summary(question):
     return {
         'id': question.id,
         'subject': question.subject,
-        'author': question.author.username,
+        'author': display_name(question.author),
+        'author_id': question.author_id,
         'create_date': _iso(question.create_date),
         'answer_count': question.answer_count,
     }
@@ -92,7 +104,7 @@ def question_summary(question):
 
 def question_to_dict(question):
     """상세용: 본문, 추천 수, 답변 목록까지 포함한다."""
-    answers = (question.answer_set.select_related('author')
+    answers = (question.answer_set.select_related('author__profile')
                .annotate(voter_count=Count('voter'))
                .order_by('create_date'))
     return {
@@ -100,7 +112,8 @@ def question_to_dict(question):
         'subject': question.subject,
         'content': question.content,
         'content_html': render_markdown(question.content),
-        'author': question.author.username,
+        'author': display_name(question.author),
+        'author_id': question.author_id,
         'create_date': _iso(question.create_date),
         'modify_date': _iso(question.modify_date),
         'voter_count': question.voter.count(),
