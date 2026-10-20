@@ -14,7 +14,7 @@ PAGE_SIZE = 10
 
 
 def _get_question(question_id):
-    return Question.objects.select_related('author__profile').filter(pk=question_id).first()
+    return Question.objects.select_related('author').filter(pk=question_id).first()
 
 
 # ---- /questions/ ----
@@ -31,7 +31,7 @@ def question_list_create(request):
 def _question_list(request):
     page = request.GET.get('page', '1')
     kw = request.GET.get('kw', '')  # 검색어
-    question_list = (Question.objects.select_related('author__profile')
+    question_list = (Question.objects.select_related('author')
                      .annotate(answer_count=Count('answer', distinct=True))
                      .order_by('-create_date'))
     if kw:
@@ -40,8 +40,8 @@ def _question_list(request):
             Q(content__icontains=kw) |  # 내용 검색
             Q(answer__content__icontains=kw) |  # 답변 내용 검색
             # 글쓴이는 화면에 보이는 닉네임으로만 검색한다 (사용자ID로 검색하면 가린 ID를 알아낼 수 있다)
-            Q(author__profile__nickname__icontains=kw) |  # 질문 글쓴이 검색
-            Q(answer__author__profile__nickname__icontains=kw)  # 답변 글쓴이 검색
+            Q(author__nickname__icontains=kw) |  # 질문 글쓴이 검색
+            Q(answer__author__nickname__icontains=kw)  # 답변 글쓴이 검색
         ).distinct()
     paginator = Paginator(question_list, PAGE_SIZE)
     page_obj = paginator.get_page(page)

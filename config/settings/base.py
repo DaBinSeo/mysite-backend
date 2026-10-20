@@ -88,6 +88,10 @@ DATABASES = {
 }
 
 
+# 회원 모델: 이름·성 대신 닉네임을 쓰는 커스텀 User (common/models.py)
+AUTH_USER_MODEL = 'common.User'
+
+
 # Password validation
 # https://docs.djangoproject.com/en/6.1/ref/settings/#auth-password-validators
 

@@ -2,15 +2,15 @@ from datetime import timedelta
 
 import jwt
 from django.conf import settings
-from django.contrib.auth.models import User
+from django.contrib.auth import get_user_model
 from django.db import connection
 from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
-from common.models import Profile
-
 from .models import Answer, Question
+
+User = get_user_model()
 
 API = '/api/v1'
 PASSWORD = 'pybo-test-pass-123'
@@ -18,8 +18,8 @@ PASSWORD = 'pybo-test-pass-123'
 
 class ApiTestCase(TestCase):
     def setUp(self):
-        self.author = User.objects.create_user('author', 'author@example.com', PASSWORD)
-        self.other = User.objects.create_user('other', 'other@example.com', PASSWORD)
+        self.author = User.objects.create_user('author', 'author@example.com', PASSWORD, nickname='글쓴이')
+        self.other = User.objects.create_user('other', 'other@example.com', PASSWORD, nickname='다른사람')
         self.question = Question.objects.create(
             author=self.author, subject='장고 질문', content='본문', create_date=timezone.now())
         self.answer = Answer.objects.create(
@@ -64,23 +64,16 @@ class QuestionReadTests(ApiTestCase):
         self.assertEqual(body['count'], 1)
         self.assertEqual(body['results'][0]['id'], self.question.id)
 
-    def test_author_shown_as_nickname_or_masked_id(self):
-        Profile.objects.create(user=self.other, nickname='다른사람')
+    def test_author_shown_as_nickname(self):
         Answer.objects.create(author=self.other, question=self.question, content='두번째',
                               create_date=timezone.now() + timedelta(seconds=1))
         body = self.client.get(f'{API}/questions/{self.question.id}/').json()
-        self.assertEqual((body['author'], body['author_id']), ('aut***', self.author.id))  # 닉네임 없음 → ID 일부 가림
-        self.assertEqual([a['author'] for a in body['answers']], ['aut***', '다른사람'])
-        self.assertEqual(self.client.get(f'{API}/questions/').json()['results'][0]['author'], 'aut***')
-
-    def test_mask_username(self):
-        from .api.v1.utils import mask_username
-        self.assertEqual([mask_username(u) for u in ['a', 'ab', 'abc', 'seodb', 'tester01']],
-                         ['*', 'a*', 'a**', 'se***', 'test****'])
+        self.assertEqual((body['author'], body['author_id']), ('글쓴이', self.author.id))
+        self.assertEqual([a['author'] for a in body['answers']], ['글쓴이', '다른사람'])
+        self.assertEqual(self.client.get(f'{API}/questions/').json()['results'][0]['author'], '글쓴이')
 
     def test_search_author_by_nickname_only(self):
-        Profile.objects.create(user=self.author, nickname='홍길동')
-        self.assertEqual(self.client.get(f'{API}/questions/', {'kw': '길동'}).json()['count'], 1)
+        self.assertEqual(self.client.get(f'{API}/questions/', {'kw': '쓴이'}).json()['count'], 1)
         self.assertEqual(self.client.get(f'{API}/questions/', {'kw': 'author'}).json()['count'], 0)
 
     def test_detail_includes_answers_and_sanitized_html(self):
@@ -120,7 +113,7 @@ class QuestionWriteTests(ApiTestCase):
     def test_create_with_token(self):
         res = self.call('post', '/questions/', {'subject': '새 질문', 'content': '내용'}, user=self.other)
         self.assertEqual(res.status_code, 201)
-        self.assertEqual(res.json()['author'], 'ot***')
+        self.assertEqual(res.json()['author'], '다른사람')
         self.assertEqual(res.json()['author_id'], self.other.id)
         self.assertTrue(Question.objects.filter(subject='새 질문', author=self.other).exists())
 
@@ -228,7 +221,7 @@ class AuthTests(ApiTestCase):
         self.assertEqual(res.status_code, 201)
         self.assertIn('access', res.json())
         self.assertEqual(res.json()['user']['nickname'], '새내기')
-        self.assertEqual(User.objects.get(username='newbie').profile.nickname, '새내기')
+        self.assertEqual(User.objects.get(username='newbie').nickname, '새내기')
 
         bad = {**data, 'username': 'newbie2', 'nickname': 'newbie2', 'password1': '123', 'password2': '123'}
         res = self.client.post(f'{API}/auth/signup/', bad, content_type='application/json')
@@ -254,10 +247,9 @@ class AuthTests(ApiTestCase):
         self.assertEqual(res.status_code, 400)
         self.assertFalse(User.objects.filter(username='dup').exists())
 
-    def test_me_nickname_fallback(self):
-        # 프로필이 없는 기존 회원은 닉네임 자리에 사용자ID를 일부 가려서 준다
+    def test_me_returns_nickname(self):
         body = self.call('get', '/auth/me/', user=self.author).json()
-        self.assertEqual(body['nickname'], 'aut***')
+        self.assertEqual(body['nickname'], '글쓴이')
         self.assertNotIn('email', body)
 
     def test_password_rules(self):
