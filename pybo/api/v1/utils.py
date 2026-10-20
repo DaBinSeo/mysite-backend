@@ -56,7 +56,10 @@ def _iso(value):
 
 
 def user_to_dict(user):
-    return {'id': user.id, 'username': user.username, 'email': user.email}
+    # 닉네임 도입 전에 가입한 회원은 프로필이 없으므로 사용자ID를 대신 보여 준다
+    profile = getattr(user, 'profile', None)
+    return {'id': user.id, 'username': user.username,
+            'nickname': profile.nickname if profile else user.username}
 
 
 def answer_to_dict(answer):

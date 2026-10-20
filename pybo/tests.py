@@ -201,16 +201,42 @@ class AuthTests(ApiTestCase):
 
     def test_signup(self):
         data = {'username': 'newbie', 'password1': 'Strong-pass-987', 'password2': 'Strong-pass-987',
-                'email': 'newbie@example.com'}
+                'nickname': '새내기'}
         res = self.client.post(f'{API}/auth/signup/', data, content_type='application/json')
         self.assertEqual(res.status_code, 201)
         self.assertIn('access', res.json())
-        self.assertTrue(User.objects.filter(username='newbie').exists())
+        self.assertEqual(res.json()['user']['nickname'], '새내기')
+        self.assertEqual(User.objects.get(username='newbie').profile.nickname, '새내기')
 
-        bad = {**data, 'username': 'newbie2', 'password1': '123', 'password2': '123'}
+        bad = {**data, 'username': 'newbie2', 'nickname': 'newbie2', 'password1': '123', 'password2': '123'}
         res = self.client.post(f'{API}/auth/signup/', bad, content_type='application/json')
         self.assertEqual(res.status_code, 400)
         self.assertIn('password2', res.json()['errors'])
+
+    def test_signup_nickname_rules(self):
+        base = {'password1': 'Strong-pass-987', 'password2': 'Strong-pass-987'}
+        valid = ['가나', 'abc', 'ab1', '홍길동99', 'a가']
+        invalid = ['', '가', 'ab', '12', 'ab c', 'ab!', '닉_네임', 'ㄱㄴ', 'a' * 21]
+        for i, nickname in enumerate(valid):
+            res = self.client.post(f'{API}/auth/signup/', {**base, 'username': f'ok{i}', 'nickname': nickname},
+                                   content_type='application/json')
+            self.assertEqual(res.status_code, 201, nickname)
+        for i, nickname in enumerate(invalid):
+            res = self.client.post(f'{API}/auth/signup/', {**base, 'username': f'bad{i}', 'nickname': nickname},
+                                   content_type='application/json')
+            self.assertEqual(res.status_code, 400, nickname)
+            self.assertIn('nickname', res.json()['errors'])
+        # 대소문자만 다른 닉네임도 중복으로 본다
+        res = self.client.post(f'{API}/auth/signup/', {**base, 'username': 'dup', 'nickname': 'ABC'},
+                               content_type='application/json')
+        self.assertEqual(res.status_code, 400)
+        self.assertFalse(User.objects.filter(username='dup').exists())
+
+    def test_me_nickname_fallback(self):
+        # 프로필이 없는 기존 회원은 닉네임 자리에 사용자ID를 준다
+        body = self.call('get', '/auth/me/', user=self.author).json()
+        self.assertEqual(body['nickname'], 'author')
+        self.assertNotIn('email', body)
 
     def test_password_rules(self):
         body = self.client.get(f'{API}/auth/password-rules/').json()
