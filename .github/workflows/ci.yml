@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.13.0"
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      # SECRET_KEY는 실행마다 임시로 만든다(테스트 전용, 저장하지 않음)
+      - name: Generate test secret key
+        run: echo "DJANGO_SECRET_KEY=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+
+      - name: Check
+        run: uv run python manage.py check
+
+      - name: Check missing migrations
+        run: uv run python manage.py makemigrations --check --dry-run
+
+      - name: Test
+        run: uv run python manage.py test
