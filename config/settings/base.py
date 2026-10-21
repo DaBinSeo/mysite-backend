@@ -144,6 +144,10 @@ JWT_REFRESH_LIFETIME_DAYS = 7
 
 
 # 로깅설정
+# logs/는 git에서 제외되므로 새로 clone한 환경(CI·서버)에서도 쓸 수 있게 만들어 둔다
+LOG_DIR = BASE_DIR / 'logs'
+LOG_DIR.mkdir(exist_ok=True)
+
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
@@ -185,7 +189,7 @@ LOGGING = {
             'level': 'INFO',
             'filters': ['require_debug_false'],
             'class': 'logging.handlers.RotatingFileHandler',
-            'filename': BASE_DIR / 'logs/mysite.log',
+            'filename': LOG_DIR / 'mysite.log',
             'maxBytes': 1024*1024*5,  # 5 MB
             'backupCount': 5,
             'formatter': 'standard',
