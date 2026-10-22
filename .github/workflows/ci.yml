@@ -5,13 +5,15 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:   # Actions 화면에서 수동 재배포
 
 permissions:
   contents: read
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # 배포 도중 끊기지 않게 PR에서만 이전 실행을 취소한다
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   test:
@@ -40,3 +42,30 @@ jobs:
 
       - name: Test
         run: uv run python manage.py test
+
+  # main에 push되고 test를 통과하면 운영 서버에 배포한다
+  deploy:
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      # 배포 키는 서버 authorized_keys에서 command=로 묶여 있어 배포 명령만 실행된다
+      - name: Deploy
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          HOST: ${{ secrets.DEPLOY_HOST }}
+        run: |
+          umask 077
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          ssh -i ~/.ssh/deploy_key -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$HOST" backend
+
+      - name: Health check
+        env:
+          DEPLOY_URL: ${{ vars.DEPLOY_URL }}
+        run: |
+          test -n "$DEPLOY_URL"
+          curl -fsS -o /dev/null --retry 10 --retry-delay 3 --retry-all-errors "$DEPLOY_URL/api/v1/questions/"
