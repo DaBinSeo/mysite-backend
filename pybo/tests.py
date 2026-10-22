@@ -255,3 +255,14 @@ class AuthTests(ApiTestCase):
     def test_password_rules(self):
         body = self.client.get(f'{API}/auth/password-rules/').json()
         self.assertEqual(len(body['rules']), 4)
+
+
+class SitemapTests(ApiTestCase):
+    def test_sitemap_lists_question_pages(self):
+        res = self.client.get('/sitemap.xml')
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res['Content-Type'], 'application/xml')
+        body = res.content.decode()
+        self.assertIn('<loc>http://testserver/questions</loc>', body)
+        self.assertIn(f'<loc>http://testserver/questions/{self.question.id}</loc>', body)
+        self.assertIn('<lastmod>', body)
