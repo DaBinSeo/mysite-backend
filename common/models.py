@@ -39,6 +39,18 @@ class User(AbstractUser):
         return self.username
 
 
+class RefreshToken(models.Model):
+    """발급한 refresh 토큰(jti). 갱신하면 새 토큰으로 바꾸고, 쓴 토큰·로그아웃한 토큰은 revoked_at을 채운다."""
+    jti = models.CharField(max_length=32, unique=True)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='refresh_tokens')
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField(db_index=True)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self):
+        return f'{self.user} ({self.jti[:8]})'
+
+
 class LoginFailure(models.Model):
     """로그인 실패 횟수 (계정+IP 조합마다 한 줄). 로그인에 성공하거나 기간이 지나면 지운다."""
     username = models.CharField('사용자ID', max_length=150)

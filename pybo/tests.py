@@ -9,6 +9,7 @@ from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
+from common.models import RefreshToken
 from .markdown_utils import render_markdown
 from .models import CONTENT_MAX_LENGTH, Answer, Question
 
@@ -249,6 +250,56 @@ class AuthTests(ApiTestCase):
                                content_type='application/json')
         self.assertEqual(res.status_code, 200)
         self.assertEqual(self.call('get', '/auth/me/', token=res.json()['access']).status_code, 200)
+
+    def refresh(self, token):
+        return self.client.post(f'{API}/auth/refresh/', {'refresh': token}, content_type='application/json')
+
+    def test_refresh_rotates_and_old_token_is_rejected(self):
+        old = self.token(self.author)['refresh']
+        res = self.refresh(old)
+        self.assertEqual(res.status_code, 200)
+        new = res.json()['refresh']
+        self.assertNotEqual(new, old)
+        res = self.refresh(old)  # 이미 쓴 토큰
+        self.assertEqual(res.status_code, 401)
+        self.assertEqual(res.json()['detail'], '이미 사용했거나 로그아웃한 토큰입니다.')
+        self.assertEqual(self.refresh(new).status_code, 200)  # 재사용 시도가 있어도 새 토큰은 그대로 쓸 수 있다
+
+    def test_logout_revokes_only_this_device(self):
+        pc, phone = self.token(self.author), self.token(self.author)
+        res = self.client.post(f'{API}/auth/logout/', {'refresh': pc['refresh']}, content_type='application/json')
+        self.assertEqual(res.status_code, 204)
+        self.assertEqual(self.refresh(pc['refresh']).status_code, 401)
+        self.assertEqual(self.refresh(phone['refresh']).status_code, 200)
+        # 잘못된 토큰이나 빈 요청도 오류 없이 끝난다
+        for body in [{'refresh': 'abc'}, {}]:
+            res = self.client.post(f'{API}/auth/logout/', body, content_type='application/json')
+            self.assertEqual(res.status_code, 204)
+
+    def test_expired_refresh_records_are_cleaned_up(self):
+        self.token(self.author)
+        RefreshToken.objects.update(expires_at=timezone.now() - timedelta(seconds=1))
+        self.token(self.author)  # 새로 발급할 때 만료된 기록을 지운다
+        self.assertEqual(RefreshToken.objects.count(), 1)
+
+    def test_password_change_invalidates_all_tokens(self):
+        tokens = self.token(self.author)
+        self.author.set_password('Changed-pass-456')
+        self.author.save()
+        res = self.call('get', '/auth/me/', token=tokens['access'])
+        self.assertEqual(res.status_code, 401)
+        self.assertEqual(res.json()['detail'], '다시 로그인해 주세요.')
+        self.assertEqual(self.refresh(tokens['refresh']).status_code, 401)
+
+    def test_token_without_password_version_is_rejected(self):
+        # 이번 변경 전에 발급한 형식(pwd·jti 없음)은 더 이상 받지 않는다
+        now = timezone.now()
+        for token_type in ['access', 'refresh']:
+            token = jwt.encode({'sub': str(self.author.id), 'type': token_type, 'iat': now,
+                                'exp': now + timedelta(minutes=5)}, settings.SECRET_KEY, algorithm='HS256')
+            res = (self.call('get', '/auth/me/', token=token) if token_type == 'access'
+                   else self.refresh(token))
+            self.assertEqual(res.status_code, 401, token_type)
 
     def test_refresh_token_cannot_be_used_as_access(self):
         tokens = self.token(self.author)

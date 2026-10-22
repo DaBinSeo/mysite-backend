@@ -1,9 +1,9 @@
 from django.contrib.auth.password_validation import password_validators_help_texts
-from django.http import JsonResponse
+from django.http import HttpResponse, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 
 from common.forms import LoginForm, UserForm
-from .jwt_auth import TokenError, create_access_token, decode_token, issue_tokens, jwt_required
+from .jwt_auth import TokenError, issue_tokens, jwt_required, revoke_refresh_token, rotate_refresh_token
 from .utils import (error_response, form_error_response, invalid_json_response,
                     method_not_allowed, parse_json, user_to_dict)
 
@@ -64,10 +64,24 @@ def refresh(request):
     if not token:
         return error_response(400, 'refresh 토큰이 필요합니다.')
     try:
-        user = decode_token(token, 'refresh')
+        tokens = rotate_refresh_token(token)  # 쓴 refresh 토큰은 폐기하고 새 refresh 토큰도 준다
     except TokenError as e:
         return error_response(401, str(e))
-    return JsonResponse({'access': create_access_token(user)})
+    return JsonResponse(tokens)
+
+
+@csrf_exempt
+def logout(request):
+    """이 기기의 refresh 토큰만 폐기한다. access 토큰은 만료(30분)까지 남지만 프런트가 지운다."""
+    if request.method != 'POST':
+        return method_not_allowed(['POST'])
+    data = parse_json(request)
+    if data is None:
+        return invalid_json_response()
+    token = data.get('refresh')
+    if token:
+        revoke_refresh_token(str(token))
+    return HttpResponse(status=204)
 
 
 def me(request):

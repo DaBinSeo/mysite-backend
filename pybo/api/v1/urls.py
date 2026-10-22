@@ -21,6 +21,7 @@ urlpatterns = [
     path('auth/password-rules/', auth_views.password_rules, name='password_rules'),
     path('auth/login/', auth_views.login, name='login'),
     path('auth/refresh/', auth_views.refresh, name='refresh'),
+    path('auth/logout/', auth_views.logout, name='logout'),
     path('auth/me/', auth_views.me, name='me'),
 
     # 그 밖의 /api/v1/ 경로는 HTML이 아닌 JSON 404
