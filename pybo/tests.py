@@ -1,3 +1,4 @@
+import time
 from datetime import timedelta
 
 import jwt
@@ -8,7 +9,8 @@ from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
-from .models import Answer, Question
+from .markdown_utils import render_markdown
+from .models import CONTENT_MAX_LENGTH, Answer, Question
 
 User = get_user_model()
 
@@ -181,6 +183,56 @@ class AnswerTests(ApiTestCase):
         self.assertEqual(self.call('delete', path, user=self.other).status_code, 403)
         self.assertEqual(self.call('delete', path, user=self.author).status_code, 204)
         self.assertFalse(Answer.objects.filter(pk=self.answer.id).exists())
+
+
+class ContentLimitTests(ApiTestCase):
+    def test_question_content_max_length(self):
+        data = {'subject': '긴 질문', 'content': '가' * CONTENT_MAX_LENGTH}
+        self.assertEqual(self.call('post', '/questions/', data, user=self.other).status_code, 201)
+        data['content'] += '가'
+        res = self.call('post', '/questions/', data, user=self.other)
+        self.assertEqual(res.status_code, 400)
+        self.assertIn('content', res.json()['errors'])
+        res = self.call('put', f'/questions/{self.question.id}/', data, user=self.author)
+        self.assertEqual(res.status_code, 400)
+
+    def test_answer_content_max_length(self):
+        path = f'/questions/{self.question.id}/answers/'
+        res = self.call('post', path, {'content': 'a' * (CONTENT_MAX_LENGTH + 1)}, user=self.other)
+        self.assertEqual(res.status_code, 400)
+        self.assertIn('content', res.json()['errors'])
+        res = self.call('put', f'/answers/{self.answer.id}/', {'content': 'a' * (CONTENT_MAX_LENGTH + 1)},
+                        user=self.author)
+        self.assertEqual(res.status_code, 400)
+
+
+class MarkdownTests(ApiTestCase):
+    def test_content_html_is_rendered_on_save(self):
+        res = self.call('put', f'/answers/{self.answer.id}/', {'content': '**수정**'}, user=self.author)
+        self.assertIn('<strong>수정</strong>', res.json()['content_html'])
+        self.answer.refresh_from_db()
+        self.assertIn('<strong>수정</strong>', self.answer.content_html)
+
+        self.question.content = '*기울임*'
+        self.question.save(update_fields=['content'])  # content만 지정해도 content_html이 함께 저장된다
+        self.question.refresh_from_db()
+        self.assertIn('<em>기울임</em>', self.question.content_html)
+
+    def test_line_breaks_code_and_sanitizing(self):
+        html = render_markdown('줄1\n줄2\n\n```py\nx = [1]\n```\n[a](javascript:alert(1)) '
+                               '<a href="javascript:alert(2)">b</a> <img src=x onerror=alert(3)>')
+        self.assertIn('줄1<br>', html)
+        self.assertIn('<pre><code>x = [1]\n</code></pre>', html)
+        self.assertNotIn('href="javascript', html)  # 마크다운 링크는 글자로 남고, HTML 링크는 href가 지워진다
+        self.assertNotIn('onerror', html)
+
+    def test_worst_case_input_renders_within_one_second(self):
+        n = CONTENT_MAX_LENGTH
+        for text in ['[' * n, '![' * (n // 2), '[a' * (n // 2), '[a][' * (n // 4), '[x](' * (n // 4),
+                     '[' * (n // 2) + ']' * (n // 2), '*_' * (n // 2), '>' * n, '`a' * (n // 2)]:
+            start = time.perf_counter()
+            render_markdown(text)
+            self.assertLess(time.perf_counter() - start, 1, text[:4])
 
 
 class AuthTests(ApiTestCase):

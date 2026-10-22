@@ -3,8 +3,6 @@ import json
 from django.db.models import Count
 from django.http import JsonResponse
 
-from ...markdown_utils import render_markdown
-
 
 # ---- 응답 헬퍼 ----
 
@@ -68,7 +66,7 @@ def answer_to_dict(answer):
         'id': answer.id,
         'question_id': answer.question_id,
         'content': answer.content,
-        'content_html': render_markdown(answer.content),
+        'content_html': answer.content_html,
         'author': answer.author.nickname,
         'author_id': answer.author_id,
         'create_date': _iso(answer.create_date),
@@ -98,7 +96,7 @@ def question_to_dict(question):
         'id': question.id,
         'subject': question.subject,
         'content': question.content,
-        'content_html': render_markdown(question.content),
+        'content_html': question.content_html,
         'author': question.author.nickname,
         'author_id': question.author_id,
         'create_date': _iso(question.create_date),

@@ -6,7 +6,7 @@ requires-python = ">=3.14"
 dependencies = [
     "django>=6.1.2",
     "gunicorn>=26.2.0",
-    "markdown>=3.11.1",
+    "markdown-it-py>=4.2.0",
     "nh3>=0.3.7",
     "pyjwt>=2.15.1",
 ]
