@@ -37,3 +37,20 @@ class User(AbstractUser):
 
     def __str__(self):
         return self.username
+
+
+class LoginFailure(models.Model):
+    """로그인 실패 횟수 (계정+IP 조합마다 한 줄). 로그인에 성공하거나 기간이 지나면 지운다."""
+    username = models.CharField('사용자ID', max_length=150)
+    ip = models.CharField('IP', max_length=45)
+    failures = models.PositiveSmallIntegerField('실패 횟수', default=0)
+    last_failed_at = models.DateTimeField('마지막 실패')
+    locked_until = models.DateTimeField('잠금 해제', null=True, blank=True)
+
+    class Meta:
+        verbose_name = verbose_name_plural = '로그인 실패'
+        constraints = [models.UniqueConstraint(fields=['username', 'ip'], name='unique_login_failure')]
+        indexes = [models.Index(fields=['last_failed_at'])]
+
+    def __str__(self):
+        return f'{self.username} ({self.ip})'

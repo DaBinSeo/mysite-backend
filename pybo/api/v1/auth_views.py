@@ -1,9 +1,8 @@
-from django.contrib.auth.forms import AuthenticationForm
 from django.contrib.auth.password_validation import password_validators_help_texts
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 
-from common.forms import UserForm
+from common.forms import LoginForm, UserForm
 from .jwt_auth import TokenError, create_access_token, decode_token, issue_tokens, jwt_required
 from .utils import (error_response, form_error_response, invalid_json_response,
                     method_not_allowed, parse_json, user_to_dict)
@@ -44,9 +43,13 @@ def login(request):
     data = parse_json(request)
     if data is None:
         return invalid_json_response()
-    form = AuthenticationForm(request, data=data)  # 장고 로그인 폼의 검증·오류 문구를 그대로 사용
+    form = LoginForm(request, data=data)  # 장고 로그인 폼의 검증·오류 문구 + 로그인 시도 제한
     if not form.is_valid():
-        return form_error_response(form)
+        response = form_error_response(form)
+        if form.has_error('__all__', LoginForm.LOCKED_CODE):
+            response.status_code = 429
+            response['Retry-After'] = str(form.locked_seconds)
+        return response
     return _token_response(form.get_user())
 
 

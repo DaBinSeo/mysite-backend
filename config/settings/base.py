@@ -143,6 +143,10 @@ JWT_ALGORITHM = 'HS256'
 JWT_ACCESS_LIFETIME_MINUTES = 30
 JWT_REFRESH_LIFETIME_DAYS = 7
 
+# 로그인 시도 제한 (API·관리자 화면 공통, 계정+IP 기준): 연속 5회 틀리면 15분 동안 막는다
+LOGIN_FAILURE_LIMIT = 5
+LOGIN_LOCK_MINUTES = 15
+
 
 # 로깅설정
 # logs/는 git에서 제외되므로 새로 clone한 환경(CI·서버)에서도 쓸 수 있게 만들어 둔다
